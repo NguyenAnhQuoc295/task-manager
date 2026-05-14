@@ -107,27 +107,28 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment:
       name: production-frontend
-      url: ${{ steps.deploy.outputs.preview-url }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Download frontend build
-        uses: actions/download-artifact@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          name: frontend-build
-          path: frontend/dist/
+          node-version: "20"
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
 
       - name: Deploy to Vercel
-        id: deploy
-        uses: amondnet/vercel-action@v25
-        with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          vercel-args: "--prod"
-          working-directory: ./frontend
+        working-directory: ./frontend
+        run: |
+          vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+          vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+          vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
   # ───────────────────────────────────────────────────────
   # JOB 4: DEPLOY BACKEND → AWS EC2
@@ -145,11 +146,14 @@ jobs:
     steps:
       - name: Trigger Render Deploy Hook
         run: |
-          curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" \
-            --fail \
-            --silent \
-            --show-error
-          echo "=== Deploy triggered on Render! ==="
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}")
+          echo "Render response: $RESPONSE"
+          if [ "$RESPONSE" -ge 200 ] && [ "$RESPONSE" -lt 300 ]; then
+            echo "=== Deploy triggered on Render! ==="
+          else
+            echo "=== Render deploy hook returned HTTP $RESPONSE ==="
+            exit 1
+          fi
 
   # ───────────────────────────────────────────────────────
   # JOB 5: NOTIFY — Thông báo kết quả (Slack)
@@ -162,39 +166,22 @@ jobs:
 
     steps:
       - name: Notify Slack on Success
-        if: needs.deploy-frontend.result == 'success' && needs.deploy-backend.result == 'success'
-        uses: slackapi/slack-github-action@v1.26.0
-        with:
-          payload: |
-            {
-              "text": "✅ *Deployment Successful!*",
-              "attachments": [{
-                "color": "good",
-                "fields": [
-                  { "title": "Repository", "value": "${{ github.repository }}", "short": true },
-                  { "title": "Branch", "value": "${{ github.ref_name }}", "short": true },
-                  { "title": "Commit", "value": "${{ github.event.head_commit.message }}", "short": false },
-                  { "title": "Author", "value": "${{ github.actor }}", "short": true }
-                ]
-              }]
-            }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        if: needs.deploy-frontend.result == 'success' && needs.deploy-backend.result == 'success' && secrets.SLACK_WEBHOOK_URL != ''
+        run: |
+          curl -s -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
+            -H 'Content-Type: application/json' \
+            -d '{"text": "✅ *Deployment Successful!* — ${{ github.repository }} @ ${{ github.ref_name }} by ${{ github.actor }}"}'
 
       - name: Notify Slack on Failure
-        if: needs.deploy-frontend.result == 'failure' || needs.deploy-backend.result == 'failure'
-        uses: slackapi/slack-github-action@v1.26.0
-        with:
-          payload: |
-            {
-              "text": "❌ *Deployment Failed!* — <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View logs>",
-              "attachments": [{
-                "color": "danger",
-                "fields": [
-                  { "title": "Author", "value": "${{ github.actor }}", "short": true },
-                  { "title": "Commit", "value": "${{ github.event.head_commit.message }}", "short": false }
-                ]
-              }]
-            }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        if: (needs.deploy-frontend.result == 'failure' || needs.deploy-backend.result == 'failure') && secrets.SLACK_WEBHOOK_URL != ''
+        run: |
+          curl -s -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
+            -H 'Content-Type: application/json' \
+            -d '{"text": "❌ *Deployment Failed!* — ${{ github.repository }} by ${{ github.actor }}"}'
+
+      - name: Log result (no Slack)
+        if: secrets.SLACK_WEBHOOK_URL == ''
+        run: |
+          echo "SLACK_WEBHOOK_URL not set — skipping Slack notification"
+          echo "Frontend: ${{ needs.deploy-frontend.result }}"
+          echo "Backend:  ${{ needs.deploy-backend.result }}"
