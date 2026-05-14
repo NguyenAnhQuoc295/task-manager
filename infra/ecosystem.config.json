@@ -1,0 +1,20 @@
+{
+  "apps": [
+    {
+      "name": "task-manager-api",
+      "script": "src/server.js",
+      "cwd": "/var/www/task-manager/backend",
+      "instances": 1,
+      "autorestart": true,
+      "watch": false,
+      "max_memory_restart": "200M",
+      "env": {
+        "NODE_ENV": "production",
+        "PORT": 3000
+      },
+      "error_file": "/var/log/pm2/task-manager-error.log",
+      "out_file": "/var/log/pm2/task-manager-out.log",
+      "log_date_format": "YYYY-MM-DD HH:mm:ss Z"
+    }
+  ]
+}
