@@ -1,0 +1,39 @@
+{
+  "env": {
+    "browser": true,
+    "es2021": true
+  },
+  "extends": ["eslint:recommended", "plugin:react/recommended"],
+  "parserOptions": {
+    "ecmaFeatures": {
+      "jsx": true
+    },
+    "ecmaVersion": "latest",
+    "sourceType": "module"
+  },
+  "plugins": ["react"],
+  "rules": {
+    "react/react-in-jsx-scope": "off",
+    "react/prop-types": "off"
+  },
+  "settings": {
+    "react": {
+      "version": "detect"
+    }
+  },
+  "overrides": [
+    {
+      "files": ["src/__tests__/**/*.{js,jsx}", "src/**/*.test.{js,jsx}"],
+      "globals": {
+        "describe": "readonly",
+        "it": "readonly",
+        "expect": "readonly",
+        "vi": "readonly",
+        "beforeEach": "readonly",
+        "afterEach": "readonly",
+        "beforeAll": "readonly",
+        "afterAll": "readonly"
+      }
+    }
+  ]
+}
