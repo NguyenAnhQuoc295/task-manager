@@ -13,8 +13,9 @@ let tasks = [
   { id: 1, title: "Learn CI/CD", done: false },
   { id: 2, title: "Setup GitHub Actions", done: false },
   { id: 3, title: "Deploy to AWS EC2", done: false },
+  { id: 4, title: "Monitor with Render Logs", done: false },
 ];
-let nextId = 4;
+let nextId = 5;
 
 // ──────────────────────────────────────
 // Routes
