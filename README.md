@@ -109,37 +109,33 @@ git push -u origin main
 4. Click "Deploy"
 5. Lấy thông tin:
    - VERCEL_TOKEN: Account Settings → Tokens → Create
-   - VERCEL_ORG_ID: Team Settings → General → Team ID
-   - VERCEL_PROJECT_ID: Project Settings → General → Project ID
+     (dạng: vcp_xxxxxxxxxxxxxxxxxxxx)
+
+   - VERCEL_ORG_ID: Team Settings → General → Team ID:
+     (dạng: team_xxxxxxxxxxxxxxxxxxxxxxxx)
+
+   - VERCEL_PROJECT_ID: Project Settings → General → Project ID:
+     (dạng: prj_xxxxxxxxxxxxxxxxxxxxxxxx)
 ```
 
 ---
 
-## BƯỚC 5 — Setup AWS EC2 (Backend)
+## BƯỚC 5 — Setup Render (Backend)
 
 ```
-1. Đăng nhập AWS Console → EC2 → Launch Instance
-2. Cấu hình:
-   - AMI: Ubuntu Server 22.04 LTS (Free tier)
-   - Instance type: t2.micro (Free tier)
-   - Key pair: Tạo mới → download file .pem
-   - Security Group (Inbound rules):
-       Port 22  (SSH)    — My IP
-       Port 80  (HTTP)   — Anywhere
-       Port 443 (HTTPS)  — Anywhere
-3. Launch instance → Lấy Public IP
-
-4. SSH vào server lần đầu:
-   chmod 400 your-key.pem
-   ssh -i your-key.pem ubuntu@YOUR_EC2_IP
-
-5. Chạy setup script:
-   # Copy file lên server
-   scp -i your-key.pem -r infra/ ubuntu@YOUR_EC2_IP:/home/ubuntu/
-
-   # SSH vào và chạy
-   ssh -i your-key.pem ubuntu@YOUR_EC2_IP
-   bash /home/ubuntu/infra/setup-ec2.sh
+1. Truy cập https://render.com → Sign in with GitHub
+2. Click "New +" → "Web Service"
+3. Chọn repo task-manager → Configure:
+   - Name: task-manager-api
+   - Root Directory: backend
+   - Runtime: Node
+   - Build Command: npm install
+   - Start Command: node src/server.js
+   - Instance Type: Free
+4. Click "Create Web Service" → chờ deploy lần đầu
+5. Lấy Deploy Hook URL:
+   Service → Settings → Deploy Hook → Copy URL
+   (dạng: https://api.render.com/deploy/srv-xxx?key=yyy)
 ```
 
 ---
@@ -150,30 +146,156 @@ git push -u origin main
 GitHub Repo → Settings → Secrets and variables → Actions → New repository secret
 
 Thêm lần lượt:
-┌─────────────────────┬────────────────────────────────────────┐
-│ Name                │ Value                                  │
-├─────────────────────┼────────────────────────────────────────┤
-│ EC2_HOST            │ 54.xxx.xxx.xxx (Public IP của EC2)     │
-│ EC2_USER            │ ubuntu                                 │
-│ EC2_PRIVATE_KEY     │ [Toàn bộ nội dung file .pem]           │
-│ VERCEL_TOKEN        │ [Token từ Vercel Account Settings]     │
-│ VERCEL_ORG_ID       │ [Team ID từ Vercel]                    │
-│ VERCEL_PROJECT_ID   │ [Project ID từ Vercel]                 │
-│ SLACK_WEBHOOK_URL   │ [Webhook URL từ Slack App] (optional)  │
-└─────────────────────┴────────────────────────────────────────┘
+┌──────────────────────────┬─────────────────────────────────────────────────────────────┐
+│ Name                     │ Value                                                       │
+├──────────────────────────┼─────────────────────────────────────────────────────────────┤
+│ RENDER_DEPLOY_HOOK_URL   │ [Deploy Hook URL từ Render Service → Settings → Deploy Hook]│
+│ VERCEL_TOKEN             │ [Token từ Vercel Account Settings]                          │
+│ VERCEL_ORG_ID            │ [Team ID từ Vercel]                                         │
+│ VERCEL_PROJECT_ID        │ [Project ID từ Vercel]                                      │
+│ SLACK_WEBHOOK_URL        │ [Webhook URL từ Slack App] (optional)                       │
+└──────────────────────────┴─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## BƯỚC 7 — Trigger Pipeline lần đầu
+## BƯỚC 7 — Tạo GitHub Actions Workflow
 
 ```bash
-# Thay đổi gì đó, ví dụ thêm task mới vào backend/src/app.js
-git add .
-git commit -m "feat: add initial tasks"
+# Tạo thư mục và file workflow
+
+# macOS / Linux:
+mkdir -p .github/workflows
+
+# Windows (PowerShell):
+New-Item -ItemType Directory -Force -Path .github/workflows
+```
+
+```yaml
+# .github/workflows/ci-cd.yml
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: "18"
+          cache: "npm"
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+        working-directory: backend
+      - run: npm test
+        working-directory: backend
+
+  test-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: "18"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npm test
+        working-directory: frontend
+
+  deploy-backend:
+    needs: [test-backend, test-frontend]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Trigger Render Deploy
+        run: |
+          curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+
+  deploy-frontend:
+    needs: [test-backend, test-frontend]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v3
+      - uses: amondnet/vercel-action@v25
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          working-directory: frontend
+          vercel-args: "--prod"
+```
+
+```bash
+# Commit workflow file
+git add .github/workflows/ci-cd.yml
+git commit -m "ci: add GitHub Actions CI/CD workflow"
+git push origin main
+```
+
+---
+
+## BƯỚC 8 — Trigger Pipeline lần đầu
+
+```bash
+# Mở file backend/src/app.js, tìm mảng tasks và thêm task thứ 4:
+```
+
+```js
+// backend/src/app.js — tìm đoạn này:
+let tasks = [
+  { id: 1, title: "Learn CI/CD", done: false },
+  { id: 2, title: "Setup GitHub Actions", done: false },
+  { id: 3, title: "Deploy to AWS EC2", done: false },
+  // ✅ Thêm 2 dòng này:
+  { id: 4, title: "Monitor with Render Logs", done: false },
+  { id: 5, title: "Write unit tests for API", done: false },
+];
+let nextId = 6; // ← cập nhật từ 4 → 6
+```
+
+```bash
+# Sau khi lưu file, commit và push:
+git add backend/src/app.js
+git commit -m "feat: add Monitor with Render Logs task"
 git push origin main
 
 # → Mở GitHub → Actions tab → xem pipeline chạy realtime
+# ✅ Jobs sẽ chạy theo thứ tự:
+#    test-backend → test-frontend → deploy-backend + deploy-frontend
+
+# ──────────────────────────────────────
+# Nhận biết pipeline THÀNH CÔNG hay THẤT BẠI:
+# ──────────────────────────────────────
+
+# 1. Trên GitHub:
+#    → Vào repo → tab "Actions"
+#    → Thấy workflow run mới nhất:
+#       🟡 Vòng tròn vàng  = đang chạy
+#       ✅ Dấu tích xanh   = PASS — deploy thành công
+#       ❌ Dấu X đỏ        = FAIL — có lỗi, KHÔNG deploy
+
+# 2. Kiểm tra backend đã deploy chưa (sau ~2-3 phút):
+curl https://task-manager-api.onrender.com/api/tasks
+# → Nếu thấy task "Monitor with Render Logs" trong danh sách = ✅ thành công
+# → Nếu timeout hoặc lỗi 502 = ❌ Render chưa deploy xong, chờ thêm
+
+# 3. Kiểm tra frontend đã cập nhật chưa:
+# → Mở browser: https://your-app.vercel.app
+# → Nếu thấy 2 task mới hiển thị trong danh sách = ✅ thành công
+
+# 4. Xem log chi tiết nếu FAIL:
+#    → GitHub Actions → click vào workflow run bị lỗi
+#    → Click vào job bị đỏ (test-backend / test-frontend)
+#    → Xem dòng lỗi cụ thể trong log
 ```
 
 ---
@@ -223,21 +345,14 @@ curl -vI https://api.yourdomain.com 2>&1 | grep -E "SSL|subject|expire"
 
 ---
 
-## Xem logs trên EC2
+## Xem logs trên Render
 
-```bash
-ssh -i your-key.pem ubuntu@YOUR_EC2_IP
+```
+1. Truy cập https://render.com → Dashboard → task-manager-api
+2. Click tab "Logs" → xem real-time logs
+3. Click tab "Events" → xem lịch sử deploy
 
-# Logs của Node.js app
-pm2 logs task-manager-api
-
-# Status các process
-pm2 status
-
-# Logs của Nginx
-sudo tail -f /var/log/nginx/access.log
-sudo tail -f /var/log/nginx/error.log
-
-# Kiểm tra SSL auto-renewal
-sudo certbot renew --dry-run
+# Kiểm tra backend đang chạy
+curl https://task-manager-api.onrender.com/health
+# → {"status":"ok","timestamp":"..."}
 ```
