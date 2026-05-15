@@ -12,10 +12,10 @@ app.use(express.json());
 let tasks = [
   { id: 1, title: "Learn CI/CD", done: false },
   { id: 2, title: "Learn CI/CD", done: false },
-  { id: 3, title: "Learn CI/CD", done: false },
-  { id: 4, title: "Learn CI/CD", done: false },
-  { id: 5, title: "Learn CI/CD", done: false },
-  { id: 6, title: "Learn CI/CD", done: false },
+  { id: 3, title: "Test CI/CD", done: false },
+  { id: 4, title: "Test CI/CD", done: false },
+  { id: 5, title: "Test CI/CD", done: false },
+  { id: 6, title: "Test CI/CD", done: false },
 ];
 let nextId = 7;
 
