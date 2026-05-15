@@ -15,7 +15,7 @@ let tasks = [
   { id: 3, title: "Deploy to AWS EC2", done: false },
   { id: 4, title: "Monitor with Render Logs", done: false },
   { id: 5, title: "Write unit tests for API", done: false },
-  { id: 6, title: "WRITE CI/CD scripts", done: false },
+  { id: 6, title: "Write unit tests for API", done: false },
 ];
 let nextId = 7;
 
