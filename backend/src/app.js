@@ -13,9 +13,9 @@ let tasks = [
   { id: 1, title: "Learn CI/CD", done: false },
   { id: 2, title: "Setup GitHub Actions", done: false },
   { id: 3, title: "Deploy to AWS EC2", done: false },
-  { id: 4, title: "Monitor with Render Logs", done: false },
-  { id: 5, title: "Write unit tests for API", done: false },
-  { id: 6, title: "WRITE CI/CD scripts", done: false },
+  { id: 4, title: "Learn CI/CD", done: false },
+  { id: 5, title: "Learn CI/CD", done: false },
+  { id: 6, title: "Learn CI/CD", done: false },
 ];
 let nextId = 7;
 
