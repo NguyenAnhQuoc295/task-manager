@@ -16,8 +16,10 @@ let tasks = [
   { id: 4, title: "Test CI/CD", done: false },
   { id: 5, title: "Test CI/CD", done: false },
   { id: 6, title: "Test CI/CD", done: false },
+  { id: 7, title: "Test CI/CD", done: false },
+  { id: 8, title: "Test CI/CD", done: false },
 ];
-let nextId = 7;
+let nextId = 9;
 
 // ──────────────────────────────────────
 // Routes
